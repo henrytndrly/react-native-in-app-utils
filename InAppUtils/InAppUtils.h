@@ -1,8 +1,9 @@
 #import <Foundation/Foundation.h>
 #import <StoreKit/StoreKit.h>
 
-#import <React/RCTBridgeModule.h>
+#import "RCTBridgeModule.h"
+#import "RCTEventEmitter.h"
 
-@interface InAppUtils : NSObject <RCTBridgeModule, SKProductsRequestDelegate, SKPaymentTransactionObserver>
+@interface InAppUtils : RCTEventEmitter <RCTBridgeModule, SKProductsRequestDelegate, SKPaymentTransactionObserver>
 
 @end
