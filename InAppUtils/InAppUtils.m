@@ -9,15 +9,18 @@
     NSArray *products;
     NSMutableDictionary *_callbacks;
     bool hasListeners;
+    
+    bool debugLogging;
 }
 
 - (instancetype)init
 {
-
+    
     if ((self = [super init])) {
         _callbacks = [[NSMutableDictionary alloc] init];
         [[SKPaymentQueue defaultQueue] addTransactionObserver:self];
         hasListeners = false;
+        debugLogging = false;
     }
     return self;
 }
@@ -53,8 +56,14 @@ RCT_EXPORT_MODULE()
  updatedTransactions:(NSArray *)transactions
 {
     for (SKPaymentTransaction *transaction in transactions) {
+        if (debugLogging) {
+            NSLog(@"processing transaction");
+        }
         switch (transaction.transactionState) {
             case SKPaymentTransactionStateFailed: {
+                if (debugLogging) {
+                    NSLog(@"failed %@", transaction.transactionIdentifier);
+                }
                 NSString *key = RCTKeyForInstance(transaction.payment.productIdentifier);
                 RCTResponseSenderBlock callback = _callbacks[key];
                 if (callback) {
@@ -67,13 +76,16 @@ RCT_EXPORT_MODULE()
                 break;
             }
             case SKPaymentTransactionStatePurchased: {
+                if (debugLogging) {
+                    NSLog(@"purchased %@", transaction.transactionIdentifier);
+                }
                 NSString *key = RCTKeyForInstance(transaction.payment.productIdentifier);
                 RCTResponseSenderBlock callback = _callbacks[key];
                 if (callback) {
                     NSDictionary *purchase = @{
-                                              @"transactionIdentifier": transaction.transactionIdentifier,
-                                              @"productIdentifier": transaction.payment.productIdentifier,
-                                              };
+                                               @"transactionIdentifier": transaction.transactionIdentifier,
+                                               @"productIdentifier": transaction.payment.productIdentifier,
+                                               };
                     callback(@[[NSNull null], purchase]);
                     [_callbacks removeObjectForKey:key];
                 } else {
@@ -86,11 +98,20 @@ RCT_EXPORT_MODULE()
                 break;
             }
             case SKPaymentTransactionStateRestored:
+                if (debugLogging) {
+                    NSLog(@"restored %@", transaction.transactionIdentifier);
+                }
                 [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
                 break;
             case SKPaymentTransactionStatePurchasing:
+                if (debugLogging) {
+                    NSLog(@"purchasing %@", transaction.transactionIdentifier);
+                }
                 break;
             case SKPaymentTransactionStateDeferred:
+                if (debugLogging) {
+                    NSLog(@"deferred %@", transaction.transactionIdentifier);
+                }
                 break;
             default:
                 break;
@@ -99,25 +120,31 @@ RCT_EXPORT_MODULE()
 }
 
 RCT_EXPORT_METHOD(processDefaultQueue) {
-
+    
+    if (debugLogging) {
+        NSLog(@"processDefaultQueue... %i", SKPaymentQueue.defaultQueue.transactions.count);
+    }
+    
     if (!hasListeners) {
         // do something here...
+        if (debugLogging) {
+            NSLog(@"no listeners...");
+        }
         return;
     }
-
+    
     NSString *transState;
-
+    
     NSURL *receiptUrl;
     NSData *receiptData;
-
-
+    
     if (SKPaymentQueue.defaultQueue.transactions.count > 0) {
         receiptUrl = [[NSBundle mainBundle] appStoreReceiptURL];
         receiptData = [NSData dataWithContentsOfURL:receiptUrl];
-
+        
         for(SKPaymentTransaction *transaction in SKPaymentQueue.defaultQueue.transactions)
         {
-
+            
             switch (transaction.transactionState) {
                 case SKPaymentTransactionStateFailed:
                     transState = @"failed";
@@ -138,7 +165,11 @@ RCT_EXPORT_METHOD(processDefaultQueue) {
                     transState = @"other";
                     break;
             }
-
+            
+            if (debugLogging) {
+                NSLog(@"processing queued transaction %@ %@", transaction.transactionIdentifier, transState);
+            }
+            
             [self sendEventWithName:@"pendingTransaction"
                                body:@{
                                       @"transactionIdentifier": transaction.transactionIdentifier,
@@ -148,10 +179,13 @@ RCT_EXPORT_METHOD(processDefaultQueue) {
         }
     }
     // no pending transactions, so don't need to do anything...
-    // else {
-    //     [self sendEventWithName:@"pendingTransaction"
-    //                        body:@{@"transCount": @0}];
-    // }
+    else {
+        //         [self sendEventWithName:@"pendingTransaction"
+        //                            body:@{@"transCount": @0}];
+        if (debugLogging) {
+            NSLog(@"No pending transactions");
+        }
+    }
 }
 
 RCT_EXPORT_METHOD(purchaseProduct:(NSString *)productIdentifier
@@ -165,7 +199,7 @@ RCT_EXPORT_METHOD(purchaseProduct:(NSString *)productIdentifier
             break;
         }
     }
-
+    
     if(product) {
         SKPayment *payment = [SKPayment paymentWithProduct:product];
         [[SKPaymentQueue defaultQueue] addPayment:payment];
@@ -197,11 +231,11 @@ restoreCompletedTransactionsFailedWithError:(NSError *)error
         for(SKPaymentTransaction *transaction in queue.transactions){
             if(transaction.transactionState == SKPaymentTransactionStateRestored) {
                 NSDictionary *purchase = @{
-                    @"originalTransactionIdentifier": transaction.originalTransaction.transactionIdentifier,
-                    @"transactionIdentifier": transaction.transactionIdentifier,
-                    @"productIdentifier": transaction.payment.productIdentifier
-                };
-
+                                           @"originalTransactionIdentifier": transaction.originalTransaction.transactionIdentifier,
+                                           @"transactionIdentifier": transaction.transactionIdentifier,
+                                           @"productIdentifier": transaction.payment.productIdentifier
+                                           };
+                
                 [productsArrayForJS addObject:purchase];
                 [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
             }
@@ -215,9 +249,16 @@ restoreCompletedTransactionsFailedWithError:(NSError *)error
 
 RCT_EXPORT_METHOD(finishTransaction:(NSString *)transactionIdentifier)
 {
+    if (debugLogging) {
+        NSLog(@"finish transaction %@", transactionIdentifier);
+    }
+    
     // find the specific transaction, and finish it.
     for(SKPaymentTransaction *transaction in SKPaymentQueue.defaultQueue.transactions){
         if ([transactionIdentifier isEqualToString:transaction.transactionIdentifier]) {
+            if (debugLogging) {
+                NSLog(@"Got through to defaultQueue:finishTransaction");
+            }
             [[SKPaymentQueue defaultQueue] finishTransaction:transaction];
         }
     }
@@ -249,9 +290,9 @@ RCT_EXPORT_METHOD(receiptData:(RCTResponseSenderBlock)callback)
     NSURL *receiptUrl = [[NSBundle mainBundle] appStoreReceiptURL];
     NSData *receiptData = [NSData dataWithContentsOfURL:receiptUrl];
     if (!receiptData) {
-      callback(@[@"not_available"]);
+        callback(@[@"not_available"]);
     } else {
-      callback(@[[NSNull null], [receiptData base64EncodedStringWithOptions:0]]);
+        callback(@[[NSNull null], [receiptData base64EncodedStringWithOptions:0]]);
     }
 }
 
