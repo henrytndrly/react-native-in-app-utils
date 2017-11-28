@@ -285,6 +285,12 @@ RCT_EXPORT_METHOD(loadProducts:(NSArray *)productIdentifiers
     }
 }
 
+RCT_EXPORT_METHOD(canMakePayments: (RCTResponseSenderBlock)callback)
+{
+    BOOL canMakePayments = [SKPaymentQueue canMakePayments];
+    callback(@[@(canMakePayments)]);
+}
+
 RCT_EXPORT_METHOD(receiptData:(RCTResponseSenderBlock)callback)
 {
     NSURL *receiptUrl = [[NSBundle mainBundle] appStoreReceiptURL];
@@ -322,6 +328,16 @@ RCT_EXPORT_METHOD(receiptData:(RCTResponseSenderBlock)callback)
         [_callbacks removeObjectForKey:key];
     } else {
         RCTLogWarn(@"No callback registered for load product request.");
+    }
+}
+
+// SKProductsRequestDelegate network error
+- (void)request:(SKRequest *)request didFailWithError:(NSError *)error{
+    NSString *key = RCTKeyForInstance(request);
+    RCTResponseSenderBlock callback = _callbacks[key];
+    if(callback) {
+        callback(@[RCTJSErrorFromNSError(error)]);
+        [_callbacks removeObjectForKey:key];
     }
 }
 
